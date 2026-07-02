@@ -17,13 +17,11 @@ export function OrgActivator() {
   })
 
   useEffect(() => {
-    if (orgId) return // already active
+    if (orgId) return
     const memberships = userMemberships?.data
     if (!memberships || memberships.length === 0) return
     const firstOrg = memberships[0].organization
-    setActive({ organization: firstOrg.id }).catch(() => {
-      // non-fatal: user can manually switch orgs
-    })
+    setActive({ organization: firstOrg.id }).catch(() => {})
   }, [orgId, userMemberships?.data, setActive])
 
   return null

@@ -13,21 +13,21 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
 interface Repo {
   id: string
-  name: string
-  fullName?: string
+  repoFullName: string
+  isActive: boolean
 }
 
 interface Integration {
   id: string
   type: string
-  externalOrgId: string
-  projectSlugs?: string[]
+  webhookUrl: string
+  webhookSecret?: string
 }
 
 type IntegrationType = 'sentry' | 'bugsnag' | 'datadog'
 
 export default function SettingsPage() {
-  const { getToken } = useAuth()
+  const { getToken, orgId } = useAuth()
 
   // GitHub section state
   const [repos, setRepos] = useState<Repo[]>([])
@@ -42,9 +42,7 @@ export default function SettingsPage() {
   const [formSuccess, setFormSuccess] = useState(false)
 
   const [integrationType, setIntegrationType] = useState<IntegrationType>('sentry')
-  const [externalOrgId, setExternalOrgId] = useState('')
-  const [apiToken, setApiToken] = useState('')
-  const [projectSlugs, setProjectSlugs] = useState('')
+  const [newWebhook, setNewWebhook] = useState<{ url: string; secret: string } | null>(null)
 
   async function authedFetch(path: string, init?: RequestInit) {
     const token = await getToken({ template: 'default' })
@@ -59,6 +57,7 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
+    if (!orgId) return
     async function loadRepos() {
       try {
         const res = await authedFetch('/api/repos')
@@ -74,9 +73,10 @@ export default function SettingsPage() {
     }
     loadRepos()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [orgId])
 
   useEffect(() => {
+    if (!orgId) return
     async function loadIntegrations() {
       try {
         const res = await authedFetch('/api/integrations')
@@ -92,17 +92,17 @@ export default function SettingsPage() {
     }
     loadIntegrations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [orgId])
 
   async function connectGitHub() {
     setGithubConnecting(true)
     try {
-      const res = await authedFetch('/api/repos/github/install-url')
+      const res = await authedFetch('/api/repos/github-install-url')
       if (res.ok) {
         const data = await res.json()
         const url = data.url ?? data.installUrl ?? data.installationUrl
         if (url) {
-          window.location.href = url
+          window.open(url, '_blank', 'noopener,noreferrer')
           return
         }
       }
@@ -117,21 +117,12 @@ export default function SettingsPage() {
     setFormError(null)
     setFormSuccess(false)
     setFormSubmitting(true)
+    setNewWebhook(null)
 
     try {
-      const slugs = projectSlugs
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-
       const res = await authedFetch('/api/integrations', {
         method: 'POST',
-        body: JSON.stringify({
-          type: integrationType,
-          externalOrgId,
-          apiToken,
-          projectSlugs: slugs,
-        }),
+        body: JSON.stringify({ type: integrationType }),
       })
 
       if (!res.ok) {
@@ -141,10 +132,10 @@ export default function SettingsPage() {
       }
 
       const created = await res.json()
-      setIntegrations((prev) => [...prev, created])
-      setExternalOrgId('')
-      setApiToken('')
-      setProjectSlugs('')
+      setIntegrations((prev) => [...prev.filter((i) => i.id !== created.id), created])
+      if (created.webhookSecret) {
+        setNewWebhook({ url: created.webhookUrl, secret: created.webhookSecret })
+      }
       setFormSuccess(true)
     } catch {
       setFormError('Could not connect to backend. Make sure it is running.')
@@ -188,7 +179,7 @@ export default function SettingsPage() {
                 <ul className="space-y-1">
                   {repos.map((repo) => (
                     <li key={repo.id} className="text-sm text-muted-foreground">
-                      {repo.fullName ?? repo.name}
+                      {repo.repoFullName}
                     </li>
                   ))}
                 </ul>
@@ -226,53 +217,31 @@ export default function SettingsPage() {
               </select>
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="externalOrgId">Organization ID</Label>
-              <Input
-                id="externalOrgId"
-                placeholder="your-org-slug"
-                value={externalOrgId}
-                onChange={(e) => setExternalOrgId(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="apiToken">API Token</Label>
-              <Input
-                id="apiToken"
-                type="password"
-                placeholder="••••••••••••••••"
-                value={apiToken}
-                onChange={(e) => setApiToken(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="projectSlugs">
-                Project Slugs{' '}
-                <span className="text-muted-foreground font-normal">(comma-separated)</span>
-              </Label>
-              <Input
-                id="projectSlugs"
-                placeholder="my-project, another-project"
-                value={projectSlugs}
-                onChange={(e) => setProjectSlugs(e.target.value)}
-              />
-            </div>
-
-            {formError && (
-              <p className="text-sm text-destructive">{formError}</p>
-            )}
-            {formSuccess && (
-              <p className="text-sm text-green-600 dark:text-green-400">Integration connected.</p>
-            )}
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
 
             <Button type="submit" disabled={formSubmitting}>
-              {formSubmitting ? 'Connecting…' : 'Connect Integration'}
+              {formSubmitting ? 'Generating…' : 'Generate Webhook'}
             </Button>
           </form>
+
+          {newWebhook && (
+            <div className="rounded-md border border-border bg-muted/40 p-4 space-y-3 text-sm">
+              <p className="font-medium text-foreground">Configure this in your Sentry project settings:</p>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Webhook URL</p>
+                <code className="block break-all text-xs bg-background border border-border rounded px-2 py-1.5">
+                  {newWebhook.url}
+                </code>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Secret</p>
+                <code className="block break-all text-xs bg-background border border-border rounded px-2 py-1.5">
+                  {newWebhook.secret}
+                </code>
+              </div>
+              <p className="text-xs text-muted-foreground">This secret will not be shown again.</p>
+            </div>
+          )}
 
           {!integrationsLoading && integrations.length > 0 && (
             <>
@@ -285,7 +254,7 @@ export default function SettingsPage() {
                       <Badge variant="outline" className="capitalize">
                         {integration.type}
                       </Badge>
-                      <span className="text-muted-foreground">{integration.externalOrgId}</span>
+                      <span className="text-muted-foreground truncate text-xs">{integration.webhookUrl}</span>
                     </li>
                   ))}
                 </ul>
