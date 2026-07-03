@@ -56,6 +56,11 @@ export default function SettingsPage() {
   const [integrationType, setIntegrationType] = useState<IntegrationType>('sentry')
   const [newWebhook, setNewWebhook] = useState<{ url: string; secret: string } | null>(null)
 
+  // Per-integration signing-secret drafts (e.g. paste Sentry's client secret)
+  const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({})
+  const [savingSecret, setSavingSecret] = useState<string | null>(null)
+  const [savedSecret, setSavedSecret] = useState<string | null>(null)
+
   async function authedFetch(path: string, init?: RequestInit) {
     const token = await getToken({ template: 'default' })
     return fetch(`${API_URL}${path}`, {
@@ -205,6 +210,27 @@ export default function SettingsPage() {
       setFormError('Could not connect to backend. Make sure it is running.')
     } finally {
       setFormSubmitting(false)
+    }
+  }
+
+  async function saveIntegrationSecret(integrationId: string) {
+    const secret = (secretDrafts[integrationId] ?? '').trim()
+    if (!secret) return
+    setSavingSecret(integrationId)
+    setSavedSecret(null)
+    try {
+      const res = await authedFetch(`/api/integrations/${integrationId}/secret`, {
+        method: 'PATCH',
+        body: JSON.stringify({ webhookSecret: secret }),
+      })
+      if (res.ok) {
+        setSavedSecret(integrationId)
+        setSecretDrafts((prev) => ({ ...prev, [integrationId]: '' }))
+      }
+    } catch {
+      // no-op; leave draft so the user can retry
+    } finally {
+      setSavingSecret(null)
     }
   }
 
@@ -368,13 +394,41 @@ export default function SettingsPage() {
               <Separator />
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">Connected integrations</p>
-                <ul className="space-y-2">
+                <ul className="space-y-4">
                   {integrations.map((integration) => (
-                    <li key={integration.id} className="flex items-center gap-2 text-sm">
-                      <Badge variant="outline" className="capitalize">
-                        {integration.type}
-                      </Badge>
-                      <span className="text-muted-foreground truncate text-xs">{integration.webhookUrl}</span>
+                    <li key={integration.id} className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="capitalize">
+                          {integration.type}
+                        </Badge>
+                        <span className="text-muted-foreground truncate text-xs">{integration.webhookUrl}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="password"
+                          placeholder="Provider signing secret (e.g. Sentry client secret)"
+                          value={secretDrafts[integration.id] ?? ''}
+                          onChange={(e) =>
+                            setSecretDrafts((prev) => ({ ...prev, [integration.id]: e.target.value }))
+                          }
+                          className="h-8 max-w-sm text-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={savingSecret === integration.id || !(secretDrafts[integration.id] ?? '').trim()}
+                          onClick={() => saveIntegrationSecret(integration.id)}
+                        >
+                          {savingSecret === integration.id ? 'Saving…' : 'Save secret'}
+                        </Button>
+                        {savedSecret === integration.id && (
+                          <span className="text-xs text-muted-foreground">Saved ✓</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        For Sentry, paste your internal integration&apos;s Client Secret so incoming webhooks verify.
+                      </p>
                     </li>
                   ))}
                 </ul>
