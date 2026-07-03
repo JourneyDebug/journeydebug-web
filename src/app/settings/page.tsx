@@ -24,6 +24,12 @@ interface Integration {
   webhookSecret?: string
 }
 
+interface DeliveryChannel {
+  id: string
+  name: string
+  type: string
+}
+
 type IntegrationType = 'sentry' | 'bugsnag' | 'datadog'
 
 export default function SettingsPage() {
@@ -33,6 +39,11 @@ export default function SettingsPage() {
   const [repos, setRepos] = useState<Repo[]>([])
   const [reposLoading, setReposLoading] = useState(true)
   const [githubConnecting, setGithubConnecting] = useState(false)
+
+  // Slack section state
+  const [channels, setChannels] = useState<DeliveryChannel[]>([])
+  const [channelsLoading, setChannelsLoading] = useState(true)
+  const [slackConnecting, setSlackConnecting] = useState(false)
 
   // Integrations section state
   const [integrations, setIntegrations] = useState<Integration[]>([])
@@ -94,6 +105,25 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId])
 
+  useEffect(() => {
+    if (!orgId) return
+    async function loadChannels() {
+      try {
+        const res = await authedFetch('/api/delivery-channels')
+        if (res.ok) {
+          const data = await res.json()
+          setChannels(Array.isArray(data) ? data : (data.channels ?? []))
+        }
+      } catch {
+        // Non-fatal: leave empty
+      } finally {
+        setChannelsLoading(false)
+      }
+    }
+    loadChannels()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId])
+
   async function connectGitHub() {
     setGithubConnecting(true)
     try {
@@ -110,6 +140,24 @@ export default function SettingsPage() {
       // Fall through
     }
     setGithubConnecting(false)
+  }
+
+  async function connectSlack() {
+    setSlackConnecting(true)
+    try {
+      const res = await authedFetch('/api/delivery-channels/slack/connect-url')
+      if (res.ok) {
+        const data = await res.json()
+        const url = data.url ?? data.connectUrl
+        if (url) {
+          window.open(url, '_blank', 'noopener,noreferrer')
+          return
+        }
+      }
+    } catch {
+      // Fall through
+    }
+    setSlackConnecting(false)
   }
 
   async function submitIntegration(e: React.FormEvent) {
@@ -189,6 +237,46 @@ export default function SettingsPage() {
 
           {!reposLoading && repos.length === 0 && (
             <p className="text-sm text-muted-foreground">No repositories connected yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Slack delivery section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Slack Delivery</CardTitle>
+          <CardDescription>
+            Connect a Slack workspace so JourneyDebug can post diagnoses to a channel.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={connectSlack}
+            disabled={slackConnecting}
+            variant="outline"
+            className="w-full sm:w-auto"
+          >
+            {slackConnecting ? 'Redirecting…' : 'Connect Slack'}
+          </Button>
+
+          {!channelsLoading && channels.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-sm font-medium text-foreground mb-2">Connected channels</p>
+                <ul className="space-y-1">
+                  {channels.map((channel) => (
+                    <li key={channel.id} className="text-sm text-muted-foreground">
+                      {channel.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {!channelsLoading && channels.length === 0 && (
+            <p className="text-sm text-muted-foreground">No Slack channels connected yet.</p>
           )}
         </CardContent>
       </Card>
