@@ -14,8 +14,8 @@ type AnalysisStatus = 'completed' | 'failed' | 'pending' | 'processing'
 interface Analysis {
   id: string
   status: AnalysisStatus
-  repo?: string
-  integration?: string
+  repoFullName?: string
+  integrationType?: string
   confidence?: number
   primaryFile?: string
   createdAt: string
@@ -98,10 +98,10 @@ export default async function HistoryPage() {
                     <StatusBadge status={analysis.status} />
                   </TableCell>
                   <TableCell className="text-sm">
-                    {analysis.repo ?? <span className="text-muted-foreground">—</span>}
+                    {analysis.repoFullName ?? <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {analysis.integration ?? <span className="text-muted-foreground">—</span>}
+                    {analysis.integrationType ?? <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell className="text-sm">
                     {analysis.confidence != null ? (
