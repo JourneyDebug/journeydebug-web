@@ -28,6 +28,7 @@ interface DeliveryChannel {
   id: string
   name: string
   type: string
+  repoId: string | null
 }
 
 type IntegrationType = 'sentry' | 'bugsnag' | 'datadog'
@@ -160,6 +161,21 @@ export default function SettingsPage() {
     setSlackConnecting(false)
   }
 
+  async function setChannelRepo(channelId: string, repoId: string | null) {
+    // Optimistic update; revert on failure
+    const previous = channels
+    setChannels((prev) => prev.map((c) => (c.id === channelId ? { ...c, repoId } : c)))
+    try {
+      const res = await authedFetch(`/api/delivery-channels/${channelId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ repoId }),
+      })
+      if (!res.ok) setChannels(previous)
+    } catch {
+      setChannels(previous)
+    }
+  }
+
   async function submitIntegration(e: React.FormEvent) {
     e.preventDefault()
     setFormError(null)
@@ -264,13 +280,29 @@ export default function SettingsPage() {
               <Separator />
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">Connected channels</p>
-                <ul className="space-y-1">
+                <ul className="space-y-2">
                   {channels.map((channel) => (
-                    <li key={channel.id} className="text-sm text-muted-foreground">
-                      {channel.name}
+                    <li key={channel.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="text-muted-foreground">{channel.name}</span>
+                      <select
+                        aria-label={`Repository for ${channel.name}`}
+                        value={channel.repoId ?? ''}
+                        onChange={(e) => setChannelRepo(channel.id, e.target.value || null)}
+                        className="h-8 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="">All repositories</option>
+                        {repos.map((repo) => (
+                          <option key={repo.id} value={repo.id}>
+                            {repo.repoFullName}
+                          </option>
+                        ))}
+                      </select>
                     </li>
                   ))}
                 </ul>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Scope a channel to a repository to receive only that repo&apos;s diagnoses. &ldquo;All repositories&rdquo; is the org-wide default.
+                </p>
               </div>
             </>
           )}
