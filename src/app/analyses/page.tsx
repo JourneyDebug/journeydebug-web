@@ -83,7 +83,8 @@ export default function AnalysesPage() {
     const q = query.trim().toLowerCase()
     if (!q) return analyses
     return analyses.filter((a) =>
-      [a.errorTitle, a.repoFullName, a.deploySha, a.primaryFile, a.culprit, a.externalIssueId]
+      [a.errorTitle, a.repoFullName, a.deploySha, a.primaryFile, a.culprit, a.externalIssueId,
+        a.diagnosisText, a.suggestedFix]
         .some((f) => f?.toLowerCase().includes(q)),
     )
   }, [analyses, query])
