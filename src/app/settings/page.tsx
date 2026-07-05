@@ -253,7 +253,7 @@ export default function SettingsPage() {
               <div className="conn" key={it.id} style={{ gridTemplateColumns: '36px 1fr' }}>
                 <span className="ico sentry">{it.type.slice(0, 2).toUpperCase()}</span>
                 <div className="info" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div className="name" style={{ textTransform: 'capitalize' }}>{it.type} <code>{it.webhookUrl}</code></div>
+                  <div className="name"><span style={{ textTransform: 'capitalize' }}>{it.type}</span> <code>{it.webhookUrl}</code></div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input type="password" className="input mono" style={{ maxWidth: 360, height: 34 }}
                       placeholder="Provider signing secret (e.g. Sentry client secret)"

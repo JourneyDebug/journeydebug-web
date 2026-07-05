@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <ClerkProvider afterSignOutUrl="/sign-in">
       <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-        <body>
+        <body suppressHydrationWarning>
           <OrgActivator />
           <Show when="signed-in">
             <AppShell>{children}</AppShell>
