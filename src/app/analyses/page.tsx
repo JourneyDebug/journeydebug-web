@@ -52,23 +52,30 @@ export default function AnalysesPage() {
 
   useEffect(() => {
     if (!orgId) return
+    let active = true
     async function load() {
       try {
         const token = await getToken({ template: 'default' })
         const res = await fetch(`${API_URL}/api/analyses`, { headers: { Authorization: `Bearer ${token}` } })
-        if (res.ok) {
+        if (res.ok && active) {
           const data = await res.json()
           const list: Analysis[] = Array.isArray(data) ? data : (data.analyses ?? [])
           setAnalyses(list)
           setSelectedId((prev) => prev ?? list[0]?.id ?? null)
         }
       } catch {
-        // non-fatal
+        // non-fatal — keep whatever we have
       } finally {
-        setLoading(false)
+        if (active) setLoading(false)
       }
     }
     load()
+    // Poll so new/updated analyses appear without a manual refresh (the "live" pill).
+    const timer = setInterval(load, 8000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId])
 
